@@ -1,7 +1,7 @@
 Kesk
 ====
 
-Kesk is a simple keyboard only drawing software.
+Kesk is a simple keyboard-only drawing software.
 
 Kesk is for **Ke**yboard **Sk**etch.
 
