@@ -57,15 +57,14 @@ def main ():
                     scale += 1
                 elif event.key == pygame.K_u:
                     # undo
-                    if len(historic_backward) > 0:
+                    if len(historic_backward) > 1:
                         historic_forward.append(historic_backward[-1])
                         del historic_backward[-1]
-                        print(grid == historic_backward[-1][0])
                         grid = historic_backward[-1][0]
                         pos = historic_backward[-1][1]
                 elif event.key == pygame.K_y:
                     # redo
-                    if len(historic_forward) > 0:
+                    if len(historic_forward) > 1:
                         historic_backward.append(historic_forward[-1])
                         del historic_forward[-1]
                         grid = historic_backward[-1][0]
