@@ -60,15 +60,13 @@ def main ():
                     if len(historic_backward) > 1:
                         historic_forward.append(historic_backward[-1])
                         del historic_backward[-1]
-                        grid = historic_backward[-1][0]
-                        pos = historic_backward[-1][1]
+                        grid = historic_backward[-1]
                 elif event.key == pygame.K_y:
                     # redo
                     if len(historic_forward) > 1:
                         historic_backward.append(historic_forward[-1])
                         del historic_forward[-1]
-                        grid = historic_backward[-1][0]
-                        pos = historic_backward[-1][1]
+                        grid = historic_backward[-1]
                 elif event.key == pygame.K_r:
                     # reset
                     grid = [[bg_color for x in range(width)] \
@@ -130,15 +128,18 @@ def main ():
             move_ticker -= 1
 
         # update historic
+        grid = [list(x) for x in grid]
         if len(historic_backward) > 0:
-            if not (grid == historic_backward[-1][0] and
-                    pos == historic_backward[-1][1]):
-                historic_backward.append(([list(x) for x in grid], pos))
+            print(historic_backward[-1] is grid)
+            if grid != historic_backward[-1]:
+
+                historic_backward.append(grid)
                 historic_forward = []
                 if len(historic_backward) > 20:
                     historic_backward = historic_backward[1:]
         else:
-            historic_backward.append((grid, pos))
+            historic_backward.append(grid)
+            print(0)
 
         # draw
         screen.fill((255, 0, 0))
