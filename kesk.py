@@ -1,171 +1,260 @@
-"""Kesk is a simple keyboard only drawing software"""
+#!/usr/bin/env python3
+
+"""Kesk is a simple keyboard-only drawing software made with pygame"""
+
 import pygame
 pygame.init()
 
-def main ():
+WIN_COLOR = 100, 100, 100
+CURSOR_COLOR = 255, 50, 50
+DEFAULT_FG_COLOR = 0, 0, 0
+DEFAULT_BG_COLOR = 255, 255, 255
 
-    # size of the image
-    size = width, height = 50,50
-    # scale of the image in the window
-    scale = 10
-    # size of the window
-    window_size = window_width, window_height = width*scale, height*scale
-    # position of the image in the window
-    img_pos = (0, 0)
-    # colors
-    fg_color = 0, 0, 0
-    bg_color = 255, 255, 255
+DEFAULT_SKETCH_WIDTH = 50
+DEFAULT_SKETCH_HEIGHT = 50
 
-    # create window and clock
-    screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
-    pygame.display.set_caption("Kesk")
-    clock = pygame.time.Clock()
+SHIFT_REPETITIONS = 5
+CURSOR_BLINK_FRAMES = 15
 
-    # 2D list for pixels values
-    grid = [[bg_color for x in range(width)] for y in range(height)]
+class Kesk:
+    """The application's class."""
 
-    # cursor position
-    pos = (int(width/2), int(height/2))
+    def __init__(self):
+        """Init Kesk."""
 
-    # historic for undo/redo
-    historic_backward = []
-    historic_forward = []
+        # colors
+        self.fg_color = DEFAULT_FG_COLOR
+        self.bg_color = DEFAULT_BG_COLOR
 
-    # ticker for count frame when a key is pressed
-    move_ticker = 0
+        # display
+        self.screen = pygame.display.set_mode((0, 0))
+        pygame.display.set_caption("Kesk")
+        self.size_max = self.screen.get_rect().size
+        self.clock = pygame.time.Clock()
 
-    # Main loop
-    quit = False
-    while not quit:
-        # events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                # quit the program
-                quit = True
-            if event.type == pygame.VIDEORESIZE:
-                # resize the window
-                window_size = (event.w, event.h)
-                screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
-            if event.type == pygame.KEYDOWN:
-                # keys
-                if event.key == pygame.K_MINUS:
-                    # zoom out
-                    if scale > 1:
-                        scale -= 1
-                elif event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS:
-                    # zoom in
-                    scale += 1
-                elif event.key == pygame.K_u:
-                    # undo
-                    if len(historic_backward) > 1:
-                        historic_forward.append(historic_backward[-1])
-                        del historic_backward[-1]
-                        grid = historic_backward[-1]
-                elif event.key == pygame.K_y:
-                    # redo
-                    if len(historic_forward) > 1:
-                        historic_backward.append(historic_forward[-1])
-                        del historic_forward[-1]
-                        grid = historic_backward[-1]
-                elif event.key == pygame.K_r:
-                    # reset
-                    grid = [[bg_color for x in range(width)] \
-                           for y in range(height)]
-                elif event.key == pygame.K_s:
-                    # save
-                    pass # NOT YET IMPLEMENTED !
+        # sketch
+        sketch_size = DEFAULT_SKETCH_WIDTH, DEFAULT_SKETCH_HEIGHT
+        self.sketch = Sketch(sketch_size, self.bg_color)
+        self.scale = 1
+        self.size = self.best_screen_size()
 
-        # get pressed keys
-        keys = pygame.key.get_pressed()
+        # cursor is a x,y tuple
+        self.cursor = int(self.sketch.size[0]/2), int(self.sketch.size[1]/2)
 
-        # if shift, do the move 5 times
+        # historic for undo/redo
+        self.historic_backward = []
+        self.historic_forward = []
+
+    def do_actions(self, keys):
+        """Do the actions related to the keys (k)
+        Return True if some action have been done"""
+        k = keys
+        p = pygame
+
+        # if shift, do the move SHIFT_REPETITIONS times
         repeat = 1
-        if keys[pygame.K_RSHIFT] or keys[pygame.K_LSHIFT]:
-            repeat = 5
+        if k[p.K_RSHIFT] or k[p.K_LSHIFT]:
+            repeat = SHIFT_REPETITIONS
 
         # do actions if no actions has been done since 10 frames
-        if move_ticker <= 0:
-            for i in range(repeat):
-                move_ticker = 10
+        for i in range(repeat):
 
-                # move the cursor
-                if keys[pygame.K_a]:
-                    pos = move(pos, (-1, -1))  # UP LEFT
-                elif keys[pygame.K_z]:
-                    pos = move(pos, ( 0, -1))  # UP
-                elif keys[pygame.K_e]:
-                    pos = move(pos, (+1, -1))  # UP RIGHT
-                elif keys[pygame.K_q]:
-                    pos = move(pos, (-1,  0))  # LEFT
-                elif keys[pygame.K_d]:
-                    pos = move(pos, (+1,  0))  # RIGHT
-                elif keys[pygame.K_w]:
-                    pos = move(pos, (-1, +1))  # DOWN LEFT
-                elif keys[pygame.K_x]:
-                    pos = move(pos, ( 0, +1))  # DOWN
-                elif keys[pygame.K_c]:
-                    pos = move(pos, (+1, +1))  # DOWN RIGHT
-                # move the image in the window
-                elif keys[pygame.K_UP]:
-                    img_pos = move(img_pos, (0, -scale))
-                elif keys[pygame.K_LEFT]:
-                    img_pos = move(img_pos, (-scale, 0))
-                elif keys[pygame.K_DOWN]:
-                    img_pos = move(img_pos, (0, +scale))
-                elif keys[pygame.K_RIGHT]:
-                    img_pos = move(img_pos, (+scale, 0))
-                # reset move_ticker if no actions
-                else: move_ticker = 0
+            # change value of selected pixel
+            if k[p.K_RETURN]:
+                self.sketch.set_at(self.cursor, self.fg_color)
+            elif k[p.K_BACKSPACE]:
+                self.sketch.set_at(self.cursor, self.bg_color)
 
-                pos = constrain(pos,size)
+            # move the cursor
+            if k[p.K_a]:
+                self.cursor = move(self.cursor, (-1, -1))  # UP LEFT
+            elif k[p.K_z]:
+                self.cursor = move(self.cursor, ( 0, -1))  # UP
+            elif k[p.K_e]:
+                self.cursor = move(self.cursor, (+1, -1))  # UP RIGHT
+            elif k[p.K_q]:
+                self.cursor = move(self.cursor, (-1,  0))  # LEFT
+            elif k[p.K_d]:
+                self.cursor = move(self.cursor, (+1,  0))  # RIGHT
+            elif k[p.K_w]:
+                self.cursor = move(self.cursor, (-1, +1))  # DOWN LEFT
+            elif k[p.K_x]:
+                self.cursor = move(self.cursor, ( 0, +1))  # DOWN
+            elif k[p.K_c]:
+                self.cursor = move(self.cursor, (+1, +1))  # DOWN RIGHT
 
-                # change value of selected pixel
-                if keys[pygame.K_RETURN]:
-                    grid[pos[0]][pos[1]] = fg_color
-                elif keys[pygame.K_BACKSPACE]:
-                    grid[pos[0]][pos[1]] = bg_color
-        else:
-            move_ticker -= 1
+            # move the image in the window
+            elif k[p.K_UP]:
+                self.sketch.pos = move(self.sketch.pos, (0, -1))
+            elif k[p.K_LEFT]:
+                self.sketch.pos = move(self.sketch.pos, (-1, 0))
+            elif k[p.K_DOWN]:
+                self.sketch.pos = move(self.sketch.pos, (0, +1))
+            elif k[p.K_RIGHT]:
+                self.sketch.pos = move(self.sketch.pos, (+1, 0))
 
-        # update historic
-        grid = [list(x) for x in grid]
-        if len(historic_backward) > 0:
-            print(historic_backward[-1] is grid)
-            if grid != historic_backward[-1]:
+            # Other actions
+            elif k[p.K_MINUS]: # Zoom out
+                if self.scale > 1: self.scale -= 1
+            elif k[p.K_PLUS] or k[p.K_EQUALS]: # Zoom in
+                self.scale += 1
+            elif k[p.K_u]: # Undo
+                if len(self.historic_backward) > 1:
+                    self.historic_forward.append(self.historic_backward[-1])
+                    del self.historic_backward[-1]
+                    self.sketch = self.historic_backward[-1]
+            elif k[p.K_y]: # Redo
+                if len(self.historic_forward) > 1:
+                    self.historic_backward.append(self.historic_forward[-1])
+                    del self.historic_forward[-1]
+                    self.sketch = self.historic_backward[-1]
+            elif k[p.K_r]: # reset
+                self.sketch = Sketch(self.sketch.size, self.bg_color)
+                break
+            elif k[p.K_s]: # save
+                pass # TODO: Save as png or something
+            else:
+                return False
 
-                historic_backward.append(grid)
-                historic_forward = []
-                if len(historic_backward) > 20:
-                    historic_backward = historic_backward[1:]
-        else:
-            historic_backward.append(grid)
-            print(0)
+        return True
 
-        # draw
-        screen.fill((255, 0, 0))
-        for x, row in enumerate(grid):
-            for y, value in enumerate(row):
-                rect = (x*scale+img_pos[0], y*scale+img_pos[1], scale, scale)
-                pygame.draw.rect(screen, value, rect)
 
-        rect = (pos[0]*scale+img_pos[0], pos[1]*scale+img_pos[1], scale, scale)
-        pygame.draw.rect(screen, (255, 0, 0), rect, 2)
+    def get_surface(self, cursor=True):
 
-        pygame.display.update()
-        clock.tick(60)
+        surface = pygame.Surface(move(self.sketch.size, self.sketch.pos))
 
-def constrain(pos, size):
-    """constrain a position (pos) in the area defined by size"""
-    x, y = pos
-    w, h = size
-    if x >= w: x = x%w
-    if y >= h: y = y%h
-    while x < 0: x = w+x
-    while y < 0: y = h+y
-    return (x, y)
+        # draw the surface
+        surface.blit(self.sketch, self.sketch.pos)
+        if cursor :
+            cursor_pos = move(self.cursor, self.sketch.pos)
+            surface.set_at(cursor_pos, CURSOR_COLOR)
+
+        # scale the surface
+        size = (surface.get_width() * self.scale,
+                surface.get_height() * self.scale)
+        surface = pygame.transform.scale(surface, size)
+
+        return surface
+
+    def main_loop(self):
+        """The app main loop"""
+
+        # ticker for count frame when a key is pressed
+        keys_ticker = 0
+        cursor_blink = CURSOR_BLINK_FRAMES
+
+        quit = False
+        while not quit:
+            # events
+            keys = None
+            for event in pygame.event.get():
+
+                if event.type == pygame.QUIT:
+                    # quit the program
+                    quit = True
+
+                if event.type == pygame.VIDEORESIZE:
+                    # resize the window
+                    window_size = (event.w, event.h)
+                    self.screen = pygame.display.set_mode(window_size, pygame.RESIZABLE)
+
+                if event.type == pygame.KEYDOWN:
+                    pass
+
+            # get pressed keys
+            keys = pygame.key.get_pressed()
+
+            # Do actions
+            if keys_ticker <= 0:
+                if keys:
+                    if self.do_actions(keys):
+                        keys_ticker = CURSOR_BLINK_FRAMES
+            else : keys_ticker -= 1
+
+            self.cursor = constrain(self.cursor,self.size)
+
+
+
+            # TODO: historic
+            # # update historic
+            # grid = [list(x) for x in grid]
+            # if len(historic_backward) > 0:
+            #     print(historic_backward[-1] is grid)
+            #     if grid != historic_backward[-1]:
+            #
+            #         historic_backward.append(grid)
+            #         historic_forward = []
+            #         if len(historic_backward) > 20:
+            #             historic_backward = historic_backward[1:]
+            # else:
+            #     historic_backward.append(grid)
+            #     print(0)
+
+
+            # draw
+            self.screen.fill(WIN_COLOR)
+            self.screen.blit(self.get_surface(cursor_blink > 0), (0, 0))
+
+            cursor_blink -= 1
+            if cursor_blink < -CURSOR_BLINK_FRAMES:
+                cursor_blink = CURSOR_BLINK_FRAMES
+
+            pygame.display.update()
+            self.clock.tick(60)
+
+
+    def best_screen_size(self):
+        """Set the window dimension and scale according to screen size.
+        Return a w,h tuple"""
+        height = self.size_max[1]
+        width = self.sketch.width*self.size_max[1]/self.sketch.height
+        if width > self.size_max[0]:
+            height = self.sketch.height*self.size_max[0]/self.sketch.width
+            width = self.size_max[0]
+
+        self.scale = int(width/self.sketch.width)
+        pygame.display.set_mode((int(width), int(height)))
+        return width, height
+
+class Sketch(pygame.Surface):
+    """A drawing"""
+
+    def width():
+        doc = "The width property."
+        def fget(self): return self.size[0]
+        def fset(self, value): self.size = value, self.size[1]
+        return locals()
+    width = property(**width())
+
+    def height():
+        doc = "The height property."
+        def fget(self): return self.size[1]
+        def fset(self, value): self.size = self.size[0], value
+        return locals()
+    height = property(**height())
+
+    def __init__(self, size, bg_color):
+        super().__init__(size)
+        self.size = size
+        self.pos = (0, 0)
+        self.fill(bg_color)
 
 def move(pos, mov):
     """Change a position (pos) by a movement (mov). Both must be (x,y) tuples"""
     return (pos[0]+mov[0], pos[1]+mov[1])
 
-main()
+def constrain(pos, size):
+    """constrain a position (pos) in the area defined by size"""
+    x, y = pos
+    w, h = size
+    if x >= w: x = x % w
+    if y >= h: y = y % h
+    while x < 0: x = w + x
+    while y < 0: y = h + y
+    return x, y
+
+
+if __name__ == "__main__":
+
+    kesk = Kesk()
+    kesk.main_loop()
